@@ -63,8 +63,6 @@
       
       const z = n - i;
       el.style.zIndex = String(z);
-      // Give each page a 2px physical separation to prevent z-fighting
-      el.style.setProperty("--tz", `${z * 2}px`);
       el.style.setProperty("--rot", "0deg");
 
       const front = document.createElement("div");
@@ -145,6 +143,16 @@
   /** Update the static left panel to show the correct page for the current spread. */
   function updateLeftPanel() {
     if (!leftPanel) return;
+    
+    // Hide the left panel entirely when on the front cover
+    if (current === 0) {
+      leftPanel.wrapper.style.opacity = "0";
+      leftPanel.wrapper.style.pointerEvents = "none";
+    } else {
+      leftPanel.wrapper.style.opacity = "1";
+      leftPanel.wrapper.style.pointerEvents = "auto";
+    }
+
     const leftName = SPREADS[current][0];
     if (leftName) {
       leftPanel.imgEl.src = src(leftName);
@@ -165,19 +173,15 @@
   function flipForward(idx) {
     const el = rightStack[idx];
     el.classList.add("turning");
-    // Raise the z-index and --tz to sit cleanly on top of the left stack
     el.style.zIndex = String(100 + idx);
-    el.style.setProperty("--tz", `${100 + idx}px`);
     el.style.setProperty("--rot", "-180deg");
   }
 
   function flipBackward(idx) {
     const el = rightStack[idx];
     el.classList.add("turning");
-    // Return to the original z-index and --tz so it slides smoothly back into the right stack
     const originalZ = N - idx;
     el.style.zIndex = String(originalZ);
-    el.style.setProperty("--tz", `${originalZ * 2}px`);
     el.style.setProperty("--rot", "0deg");
   }
 
@@ -213,7 +217,6 @@
       el.style.transition = "none";
       const z = N - i;
       el.style.zIndex = String(z);
-      el.style.setProperty("--tz", `${z * 2}px`);
       el.style.setProperty("--rot", "0deg");
       void el.offsetWidth;   // force reflow so the transition removal takes effect
       el.style.transition = "";
