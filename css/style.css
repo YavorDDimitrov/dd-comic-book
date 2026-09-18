@@ -92,10 +92,9 @@ body.spread-mode #perspective{
 #book{
   position: relative;
   width: 100%; height: 100%;
-  display: flex;
-  flex-direction: row;
-  gap: 0;
   will-change: transform;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
 }
 
 /* spin-into-view entrance, plays automatically on load */
@@ -124,19 +123,19 @@ body.spread-mode #perspective{
 
 /* ---------- Left / right page slots ---------- */
 .book-slot{
-  position: relative;
-  height: 100%;
-  perspective: 2600px;
-  -webkit-perspective: 2600px;
+  position: absolute;
+  top: 0; bottom: 0;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
 }
 /* mobile / single-page mode: right slot fills the whole book */
-#pages-right{ flex: 1 1 100%; width: 100%; margin-left: auto; }
+#pages-right{ left: 0; right: 0; width: 100%; }
 
-/* desktop spread mode: right slot takes right half, pushed to the right by margin-left auto */
+/* desktop spread mode: right slot takes right half */
 body.spread-mode #pages-right{
-  flex: 0 0 calc(50% - 6px);
-  width: calc(50% - 6px);
-  margin-left: auto;
+  left: 50%;
+  right: 0;
+  width: 50%;
 }
 /* a soft spine shadow down the centre of an open spread */
 body.spread-mode #book::before{
@@ -180,8 +179,14 @@ body.spread-mode #book::before{
   background: var(--ink);
 }
 /* 1px translateZ creates physical thickness, preventing front/back z-fighting on iOS */
-.page-face.front{ transform: rotateY(0deg) translateZ(1px); }
-.page-face.back{ transform: rotateY(180deg) translateZ(1px); }
+.page-face.front{ 
+  transform: rotateY(0deg) translateZ(1px); 
+  -webkit-transform: rotateY(0deg) translateZ(1px);
+}
+.page-face.back{ 
+  transform: rotateY(180deg) translateZ(2px); 
+  -webkit-transform: rotateY(180deg) translateZ(2px);
+}
 
 .page-face img{
   width: 100%; height: 100%;
