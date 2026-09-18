@@ -11,8 +11,8 @@
 
   const src = (name) => `assets/images/${name}.jpg`;
 
-  // ---- Viewport mode detection for CSS layout (centering the spine) ----
-  const isDesktop = window.matchMedia("(min-width: 900px) and (pointer: fine)").matches;
+  // ---- Viewport mode detection strictly by width ----
+  const isDesktop = window.innerWidth > 768;
   document.body.classList.toggle("spread-mode", isDesktop);
 
   // ---- DOM refs ----
@@ -37,10 +37,6 @@
     return card;
   }
 
-  /**
-   * Build a stack of flip-able page leaves inside a container.
-   * Each entry in `names` is an image basename (or null for a blank title card).
-   */
   function buildStack(container, names) {
     const n = names.length;
     return names.map((name, i) => {
@@ -49,9 +45,12 @@
       
       const z = n - i;
       el.style.zIndex = String(z);
-      // Give each page a 2px physical separation to prevent z-fighting
+      
+      // Inject both 3D and 2D variables; CSS media queries will decide which to use
       el.style.setProperty("--tz", `${z * 2}px`);
       el.style.setProperty("--rot", "0deg");
+      el.style.setProperty("--tx", "0px");
+      el.style.setProperty("--op", "1");
 
       const front = document.createElement("div");
       front.className = "page-face front";
@@ -76,41 +75,42 @@
     });
   }
 
-  // ---------- Assemble the view for the current viewport ----------
-
   const rightStack = buildStack(rightContainer, ALL_PAGES);
 
-  const N    = rightStack.length;   // total turnable positions
+  const N    = rightStack.length;   
   const LAST = N - 1;
-  let current   = 0;                // current spread/page index
-  let animating = false;            // lock to prevent overlapping flips
+  let current   = 0;                
+  let animating = false;            
 
   // ---------- Flip mechanics ----------
 
   function flipForward(idx) {
     const el = rightStack[idx];
     el.classList.add("turning");
-    // Raise the z-index and --tz to sit cleanly on top of the left stack
     el.style.zIndex = String(100 + idx);
+    
+    // Desktop 3D variables
     el.style.setProperty("--tz", `${100 + idx}px`);
     el.style.setProperty("--rot", "-180deg");
+    // Mobile 2D slide variables
+    el.style.setProperty("--tx", "-100%");
+    el.style.setProperty("--op", "0");
   }
 
   function flipBackward(idx) {
     const el = rightStack[idx];
     el.classList.add("turning");
-    // Return to the original z-index and --tz so it slides smoothly back into the right stack
     const originalZ = N - idx;
     el.style.zIndex = String(originalZ);
+    
+    // Desktop 3D variables
     el.style.setProperty("--tz", `${originalZ * 2}px`);
     el.style.setProperty("--rot", "0deg");
+    // Mobile 2D slide variables
+    el.style.setProperty("--tx", "0px");
+    el.style.setProperty("--op", "1");
   }
 
-  /**
-   * Wait for a page's CSS flip transition to complete, then run `cb`.
-   * Uses transitionend with a safety timeout so the callback always fires,
-   * even if the browser swallows the event (common on mobile).
-   */
   function onFlipDone(idx, cb) {
     const el = rightStack[idx];
     let settled = false;
@@ -123,15 +123,13 @@
     }
 
     function handler(e) {
-      if (e.propertyName === "transform") finish();
+      if (e.propertyName === "transform" || e.propertyName === "opacity") finish();
     }
 
     el.addEventListener("transitionend", handler);
-    // Safety: guarantee the callback fires even if transitionend is swallowed
     setTimeout(finish, 1000);
   }
 
-  /** Instantly reset the entire right stack to its initial (all-unflipped) state. */
   function resetStackInstant() {
     rightStack.forEach((el, i) => {
       el.classList.remove("turning");
@@ -140,7 +138,9 @@
       el.style.zIndex = String(z);
       el.style.setProperty("--tz", `${z * 2}px`);
       el.style.setProperty("--rot", "0deg");
-      void el.offsetWidth;   // force reflow so the transition removal takes effect
+      el.style.setProperty("--tx", "0px");
+      el.style.setProperty("--op", "1");
+      void el.offsetWidth;   
       el.style.transition = "";
     });
   }
@@ -186,7 +186,6 @@
 
     updateCounter();
 
-    // Show/hide prev and next based on new position
     prevBtn.classList.toggle("hidden", current === 0);
     nextBtn.classList.toggle("hidden", current === LAST);
 
@@ -198,7 +197,6 @@
       if (reachedLast) {
         triggerCloseFlourish();
         spawnFireworks();
-        // Delay unlocking + showing restart until the close flourish is done
         setTimeout(() => {
           animating = false;
           updateArrows();
@@ -224,8 +222,6 @@
       updateCounter();
 
       onFlipDone(idx, () => {
-        // Reset z-index to its resting position now that the animation is complete
-        // (Z-index is now managed at the start of flipBackward, so we just remove the turning class)
         rightStack[idx].classList.remove("turning");
         animating = false;
       });
@@ -247,12 +243,12 @@
     const DUR = 420;
     bookEl.style.transition =
       `transform ${DUR}ms cubic-bezier(.5,0,.5,1), opacity ${DUR}ms ease`;
-    bookEl.style.transform = "rotateY(90deg) scaleX(0.05)";
+    bookEl.style.transform = isDesktop ? "rotateY(90deg) scaleX(0.05)" : "scale(0.8)";
     bookEl.style.opacity   = "0.15";
 
     setTimeout(() => {
       bookEl.style.transition = "none";
-      bookEl.style.transform  = "rotateY(-90deg) scaleX(0.05)";
+      bookEl.style.transform  = isDesktop ? "rotateY(-90deg) scaleX(0.05)" : "scale(0.8)";
 
       resetStackInstant();
       current = 0;
@@ -260,7 +256,7 @@
 
       bookEl.style.transition =
         `transform ${DUR}ms cubic-bezier(.5,0,.5,1), opacity ${DUR}ms ease`;
-      bookEl.style.transform = "rotateY(0deg) scaleX(1)";
+      bookEl.style.transform = isDesktop ? "rotateY(0deg) scaleX(1)" : "scale(1)";
       bookEl.style.opacity   = "1";
 
       setTimeout(() => {
@@ -280,8 +276,6 @@
   prevBtn.addEventListener("click", goPrev);
   restartBtn.addEventListener("click", startFromBeginning);
 
-  // Click / tap zones on the book itself
-  // ---- Universal: swipe + tap, with conflict prevention ----
   let swipeFired  = false;
   let touchStartX = null;
   let touchStartY = null;
@@ -296,7 +290,6 @@
     if (touchStartX === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
-    // Only count a horizontal swipe if dx is dominant over dy
     if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
       swipeFired = true;
       dx < 0 ? goNext() : goPrev();
@@ -306,26 +299,17 @@
   }, { passive: true });
 
   rightContainer.addEventListener("click", (e) => {
-    // Ignore the click if a swipe was just handled
     if (swipeFired) { swipeFired = false; return; }
     
-    // On desktop spread mode, rightContainer is 50% width and centered on the right.
-    // If the user clicks the left half of the screen, it usually won't hit rightContainer 
-    // because rightContainer is only on the right half. But they have nav arrows for that.
-    // If they click rightContainer itself, we just go next.
-    // On mobile, rightContainer is 100% width, so we check left/right side.
     const rect = rightContainer.getBoundingClientRect();
     const x = e.clientX - rect.left;
     if (rect.width > window.innerWidth * 0.8) {
-      // Full screen (mobile)
       x > rect.width / 2 ? goNext() : goPrev();
     } else {
-      // Desktop spread half-width container
       goNext();
     }
   });
 
-  // Keyboard navigation
   document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); goNext(); }
     if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); }
@@ -373,20 +357,18 @@
   });
 
   muteBtn.addEventListener("click", (e) => {
-    e.stopPropagation();     // don't let this bubble to the gesture handlers
+    e.stopPropagation();     
     hasUserInteracted = true;
     removeGestureListeners();
     toggleAudio();
   });
 
-  // Try autoplay; if the browser blocks it, play on first user gesture.
   audio.play().catch(() => {});
 
-  /** Attempt to start audio on the user's first gesture (tap, click, key). */
   function onFirstGesture() {
     if (hasUserInteracted) return;
     if (!audio.paused) {
-      removeGestureListeners(); // already playing — clean up
+      removeGestureListeners(); 
       return;
     }
     const p = audio.play();
@@ -394,7 +376,7 @@
       p.then(() => {
         hasUserInteracted = true;
         removeGestureListeners();
-      }).catch(() => {/* still blocked; keep listening for next gesture */});
+      }).catch(() => {});
     }
   }
 
@@ -405,13 +387,12 @@
     window.removeEventListener("click",       onFirstGesture, true);
   }
 
-  // Listen on all common gesture types for maximum compatibility
   window.addEventListener("pointerdown", onFirstGesture, true);
   window.addEventListener("keydown",     onFirstGesture, true);
   window.addEventListener("touchstart",  onFirstGesture, true);
   window.addEventListener("click",       onFirstGesture, true);
 
-  // ---------- Entrance: spin the book into view ----------
+  // ---------- Entrance ----------
 
   requestAnimationFrame(() => {
     bookWrap.classList.add("enter-run");
@@ -432,11 +413,10 @@
     }
 
     bookWrap.addEventListener("animationend", onAnimEnd);
-    // Fallback: force visibility if animationend never fires (mobile quirk)
     setTimeout(finishEntrance, 2000);
   });
 
-  // ---------- Lightweight starfield background ----------
+  // ---------- Lightweight starfield ----------
 
   (function starfield() {
     const canvas = document.getElementById("stars");
@@ -475,7 +455,7 @@
     requestAnimationFrame(draw);
   })();
 
-  // ---------- Fireworks burst (played when the back cover is reached) ----------
+  // ---------- Fireworks burst ----------
 
   const spawnFireworks = (function fireworksModule() {
     const canvas = document.getElementById("fireworks");
@@ -524,7 +504,7 @@
       particles.forEach((p) => {
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.045;     // gravity
+        p.vy += 0.045;     
         p.life -= p.decay;
       });
       particles = particles.filter((p) => p.life > 0);
