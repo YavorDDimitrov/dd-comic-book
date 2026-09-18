@@ -21,6 +21,7 @@ html, body{
   font-family: 'Oswald', sans-serif;
   color: var(--paper);
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 #stage{
@@ -52,6 +53,7 @@ html, body{
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   box-shadow: 0 0 0 rgba(255,122,26,0);
 }
@@ -71,6 +73,7 @@ html, body{
 
 #perspective{
   perspective: 2600px;
+  -webkit-perspective: 2600px;
   perspective-origin: 50% 50%;
   width: min(64vh, 92vw);
   height: min(95.4vh, 137.1vw);
@@ -93,6 +96,7 @@ body.spread-mode #perspective{
   flex-direction: row;
   gap: 0;
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
   will-change: transform;
 }
 
@@ -125,6 +129,7 @@ body.spread-mode #perspective{
   position: relative;
   height: 100%;
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
 }
 /* mobile / single-page mode: right slot fills the whole book, left is unused */
 #pages-left{ flex: 0 0 0%; width: 0%; opacity: 0; pointer-events: none; }
@@ -154,26 +159,56 @@ body.spread-mode #book::before{
   pointer-events: none;
 }
 
+/* ---------- Static left panel (desktop spread mode) ---------- */
+/* Replaces the old dual-stack approach to eliminate the "two books" bug. */
+.left-panel{
+  width: 100%; height: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.55);
+  background: var(--ink);
+  position: relative;
+}
+.left-panel-img{
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* spine shadow on the RIGHT edge of the left panel (nearest the spine) */
+.left-panel::after{
+  content:"";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: linear-gradient(270deg, rgba(0,0,0,0.35) 0%, transparent 16%);
+}
+
+/* ---------- Flip pages ---------- */
 .page{
   position: absolute;
   inset: 0;
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
   transform-origin: left center;
   transform: rotateY(0deg);
   transition: transform 0.85s cubic-bezier(.63,.06,.34,1);
   cursor: pointer;
 }
 .page.flipped{
-  transform: rotateY(-178deg);
+  transform: rotateY(-180deg);
 }
-/* subtle lift while a page is actively turning, so it visibly sweeps over the stack */
+/* GPU hint applied only while actively turning, removed after to save memory */
 .page.turning{
+  will-change: transform;
   transition: transform 0.85s cubic-bezier(.63,.06,.34,1), box-shadow 0.85s ease;
 }
 
 .page-face{
   position: absolute; inset: 0;
   backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   border-radius: 4px;
   overflow: hidden;
   box-shadow: 0 10px 40px rgba(0,0,0,0.55);
@@ -188,6 +223,7 @@ body.spread-mode #book::before{
   display: block;
   pointer-events: none;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 /* back-of-page / inside-cover design: plain cardstock with the book's title,
@@ -244,6 +280,7 @@ body.spread-mode #book::before{
   z-index: 50;
   transition: opacity 0.25s ease, transform 0.15s ease, box-shadow 0.15s ease;
   backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
 .nav-arrow:hover{ box-shadow: 0 0 18px rgba(255,122,26,0.5); transform: translateY(-50%) scale(1.08); }
 .nav-arrow:active{ transform: translateY(-50%) scale(0.96); }
@@ -253,7 +290,7 @@ body.spread-mode #book::before{
 #next-btn{ right: 14px; }
 
 @media (max-width: 640px){
-  .nav-arrow{ width: 42px; height: 42px; }
+  .nav-arrow{ width: 46px; height: 46px; }
   #prev-btn{ left: 6px; }
   #next-btn{ right: 6px; }
 }

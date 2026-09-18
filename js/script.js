@@ -9,34 +9,54 @@
     "page7", "page8", "page9", "page10", "page11", "page12", "back_cover",
   ];
 
-  // ---- Desktop two-page spread: right-hand (recto) and left-hand (verso)
-  // stacks, advanced together. Odd story pages sit on the left, even on the
-  // right, with the covers alone on the right and a blank/title inside-cover
-  // panel (null) on the left opposite each cover. ----
-  const RIGHT_PAGES = ["front_cover", "page2", "page4", "page6", "page8", "page10", "page12", "back_cover"];
-  const LEFT_PAGES  = [null, "page1", "page3", "page5", "page7", "page9", "page11", null];
+  // ---- Desktop two-page spread pairs: [leftPage, rightPage] ----
+  // null = blank inside-cover title card
+  const SPREADS = [
+    [null,     "front_cover"],
+    ["page1",  "page2"],
+    ["page3",  "page4"],
+    ["page5",  "page6"],
+    ["page7",  "page8"],
+    ["page9",  "page10"],
+    ["page11", "page12"],
+    [null,     "back_cover"],
+  ];
 
   const src = (name) => `assets/images/${name}.jpg`;
 
+  // ---- Viewport mode detection ----
   const isDesktop = window.matchMedia("(min-width: 900px) and (pointer: fine)").matches;
   document.body.classList.toggle("spread-mode", isDesktop);
 
-  const leftContainer = document.getElementById("pages-left");
+  // ---- DOM refs ----
+  const leftContainer  = document.getElementById("pages-left");
   const rightContainer = document.getElementById("pages-right");
-  const prevBtn = document.getElementById("prev-btn");
-  const nextBtn = document.getElementById("next-btn");
-  const counterEl = document.getElementById("page-counter");
-  const bookWrap = document.getElementById("book-wrap");
-  const bookEl = document.getElementById("book");
-  const muteBtn = document.getElementById("mute-btn");
-  const iconOn = document.getElementById("icon-on");
-  const iconOff = document.getElementById("icon-off");
-  const audio = document.getElementById("bg-audio");
-  const restartBtn = document.getElementById("restart-btn");
+  const prevBtn        = document.getElementById("prev-btn");
+  const nextBtn        = document.getElementById("next-btn");
+  const counterEl      = document.getElementById("page-counter");
+  const bookWrap       = document.getElementById("book-wrap");
+  const bookEl         = document.getElementById("book");
+  const muteBtn        = document.getElementById("mute-btn");
+  const iconOn         = document.getElementById("icon-on");
+  const iconOff        = document.getElementById("icon-off");
+  const audio          = document.getElementById("bg-audio");
+  const restartBtn     = document.getElementById("restart-btn");
 
-  // ---------- Build a stack of flip leaves inside a container ----------
-  // `names` entries are image basenames (without extension) or null for a
-  // blank/title inside-cover panel.
+  // ---------- Build helpers ----------
+
+  function makeBackCard() {
+    const card = document.createElement("div");
+    card.className = "back-card";
+    const span = document.createElement("span");
+    span.textContent = BOOK_TITLE;
+    card.appendChild(span);
+    return card;
+  }
+
+  /**
+   * Build a stack of flip-able page leaves inside a container.
+   * Each entry in `names` is an image basename (or null for a blank title card).
+   */
   function buildStack(container, names) {
     const n = names.length;
     return names.map((name, i) => {
@@ -67,59 +87,141 @@
     });
   }
 
-  function makeBackCard() {
-    const card = document.createElement("div");
-    card.className = "back-card";
-    const span = document.createElement("span");
-    span.textContent = BOOK_TITLE;
-    card.appendChild(span);
-    return card;
+  /**
+   * Build a static left-hand panel for desktop spread mode.
+   * Shows either a page image or a blank title card, updated instantly
+   * when the user navigates. This replaces the old dual-stack approach
+   * that caused the "two books" rendering bug.
+   */
+  function buildLeftPanel(container) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "left-panel";
+
+    const imgEl = document.createElement("img");
+    imgEl.className = "left-panel-img";
+    imgEl.draggable = false;
+
+    const cardEl = makeBackCard();
+
+    wrapper.appendChild(imgEl);
+    wrapper.appendChild(cardEl);
+    container.appendChild(wrapper);
+
+    return { wrapper, imgEl, cardEl };
   }
 
-  function flipForward(stack, idx) {
-    const el = stack[idx];
+  // ---------- Assemble the view for the current viewport ----------
+
+  let leftPanel = null;
+
+  // Desktop: right stack holds the right-hand page of each spread.
+  // Mobile:  right stack holds every page in sequential reading order.
+  const rightStack = buildStack(
+    rightContainer,
+    isDesktop ? SPREADS.map((s) => s[1]) : ALL_PAGES
+  );
+
+  if (isDesktop) {
+    leftPanel = buildLeftPanel(leftContainer);
+    // Pre-load all left-panel images so they swap instantly on navigation
+    SPREADS.forEach(([leftName]) => {
+      if (leftName) {
+        const preload = new Image();
+        preload.src = src(leftName);
+      }
+    });
+  }
+
+  const N    = rightStack.length;   // total turnable positions
+  const LAST = N - 1;
+  let current   = 0;                // current spread/page index
+  let animating = false;            // lock to prevent overlapping flips
+  let userMuted = false;
+
+  // ---------- Desktop left-panel management ----------
+
+  /** Update the static left panel to show the correct page for the current spread. */
+  function updateLeftPanel() {
+    if (!leftPanel) return;
+    const leftName = SPREADS[current][0];
+    if (leftName) {
+      leftPanel.imgEl.src = src(leftName);
+      leftPanel.imgEl.alt = leftName.replace(/_/g, " ");
+      leftPanel.imgEl.style.display = "block";
+      leftPanel.cardEl.style.display = "none";
+    } else {
+      leftPanel.imgEl.style.display = "none";
+      leftPanel.cardEl.style.display = "";   // restore CSS default (flex)
+    }
+  }
+
+  // Set the initial left-panel state
+  if (isDesktop) updateLeftPanel();
+
+  // ---------- Flip mechanics ----------
+
+  function flipForward(idx) {
+    const el = rightStack[idx];
     el.classList.add("turning");
-    el.style.zIndex = String(100 + idx); // rises above the stack while/after turning
+    el.style.zIndex = String(100 + idx);   // rise above the unflipped stack
     el.classList.add("flipped");
   }
 
-  function flipBackward(stack, idx) {
-    const n = stack.length;
-    const el = stack[idx];
-    el.style.zIndex = String(n - idx);
+  function flipBackward(idx) {
+    const el = rightStack[idx];
+    el.classList.add("turning");
+    // Keep z-index high (100 + idx) during the backward flip animation
+    // so the page is visible while rotating back. It is reset to its
+    // resting value inside onFlipDone after the transition ends.
     el.classList.remove("flipped");
   }
 
-  function resetStackInstant(stack) {
-    const n = stack.length;
-    stack.forEach((el, i) => {
-      el.classList.remove("turning");
+  /**
+   * Wait for a page's CSS flip transition to complete, then run `cb`.
+   * Uses transitionend with a safety timeout so the callback always fires,
+   * even if the browser swallows the event (common on mobile).
+   */
+  function onFlipDone(idx, cb) {
+    const el = rightStack[idx];
+    let settled = false;
+
+    function finish() {
+      if (settled) return;
+      settled = true;
+      el.removeEventListener("transitionend", handler);
+      cb();
+    }
+
+    function handler(e) {
+      if (e.propertyName === "transform") finish();
+    }
+
+    el.addEventListener("transitionend", handler);
+    // Safety: guarantee the callback fires even if transitionend is swallowed
+    setTimeout(finish, 1000);
+  }
+
+  /** Instantly reset the entire right stack to its initial (all-unflipped) state. */
+  function resetStackInstant() {
+    rightStack.forEach((el, i) => {
+      el.classList.remove("turning", "flipped");
       el.style.transition = "none";
-      el.classList.remove("flipped");
-      el.style.zIndex = String(n - i);
-      void el.offsetWidth;
+      el.style.zIndex = String(N - i);
+      void el.offsetWidth;   // force reflow so the transition removal takes effect
       el.style.transition = "";
     });
   }
 
-  // ---------- Assemble the active stack(s) for this viewport ----------
-  const rightStack = buildStack(rightContainer, isDesktop ? RIGHT_PAGES : ALL_PAGES);
-  const leftStack = isDesktop ? buildStack(leftContainer, LEFT_PAGES) : [];
-
-  const N = rightStack.length;      // number of turnable states in this mode
-  const LAST = N - 1;
-  let current = 0;
-  let animating = false;
-  let userMuted = false;
+  // ---------- UI state helpers ----------
 
   function labelFor(idx) {
     if (isDesktop) {
-      if (idx === 0) return "Front Cover";
+      if (idx === 0)    return "Front Cover";
       if (idx === LAST) return "Back Cover";
-      const evenPage = idx * 2;
-      return `Pages ${evenPage - 1}\u2013${evenPage}`;
+      const rp = idx * 2;
+      return `Pages ${rp - 1}\u2013${rp}`;
     }
-    if (idx === 0) return "Front Cover";
+    if (idx === 0)    return "Front Cover";
     if (idx === LAST) return "Back Cover";
     return `Page ${idx} of ${N - 2}`;
   }
@@ -130,59 +232,83 @@
   }
 
   function updateArrows() {
-    const atLast = current === LAST;
-    prevBtn.classList.toggle("hidden", current === 0 || animating);
-    nextBtn.classList.toggle("hidden", atLast || animating);
-    restartBtn.classList.toggle("hidden", !atLast || animating);
+    prevBtn.classList.toggle("hidden", current === 0);
+    nextBtn.classList.toggle("hidden", current === LAST);
+    restartBtn.classList.toggle("hidden", current !== LAST);
   }
 
   function triggerCloseFlourish() {
     bookEl.classList.add("book-closing");
-    window.setTimeout(() => bookEl.classList.remove("book-closing"), 620);
+    setTimeout(() => bookEl.classList.remove("book-closing"), 620);
   }
+
   function triggerOpenFlourish() {
     bookEl.classList.add("book-opening");
-    window.setTimeout(() => bookEl.classList.remove("book-opening"), 620);
+    setTimeout(() => bookEl.classList.remove("book-opening"), 620);
   }
+
+  // ---------- Navigation ----------
 
   function goNext() {
     if (animating || current >= LAST) return;
     animating = true;
-    flipForward(rightStack, current);
-    if (isDesktop) flipForward(leftStack, current);
+
+    const fromIdx = current;
+    flipForward(fromIdx);
     current += 1;
-    updateArrows();
+
+    if (isDesktop) updateLeftPanel();
     updateCounter();
+
+    // Show/hide prev and next based on new position
+    prevBtn.classList.toggle("hidden", current === 0);
+    nextBtn.classList.toggle("hidden", current === LAST);
+
     const reachedLast = current === LAST;
-    window.setTimeout(() => {
+
+    onFlipDone(fromIdx, () => {
+      rightStack[fromIdx].classList.remove("turning");
+
       if (reachedLast) {
         triggerCloseFlourish();
         spawnFireworks();
-        window.setTimeout(() => { animating = false; updateArrows(); }, 620);
+        // Delay unlocking + showing restart until the close flourish is done
+        setTimeout(() => {
+          animating = false;
+          updateArrows();
+        }, 620);
       } else {
         animating = false;
-        updateArrows();
       }
-    }, 900);
+    });
   }
 
   function goPrev() {
     if (animating || current <= 0) return;
     animating = true;
+
     const wasLast = current === LAST;
 
-    const doFlip = () => {
+    function doFlip() {
       current -= 1;
-      flipBackward(rightStack, current);
-      if (isDesktop) flipBackward(leftStack, current);
+      const idx = current;
+      flipBackward(idx);
+
+      if (isDesktop) updateLeftPanel();
       updateArrows();
       updateCounter();
-      window.setTimeout(() => { animating = false; updateArrows(); }, 900);
-    };
+
+      onFlipDone(idx, () => {
+        // Reset z-index to its resting position now that the animation is complete
+        rightStack[idx].style.zIndex = String(N - idx);
+        rightStack[idx].classList.remove("turning");
+        animating = false;
+      });
+    }
 
     if (wasLast) {
       triggerOpenFlourish();
-      window.setTimeout(doFlip, 200);
+      setTimeout(doFlip, 200);
     } else {
       doFlip();
     }
@@ -194,26 +320,29 @@
     restartBtn.classList.add("hidden");
 
     const DUR = 420;
-    bookEl.style.transition = `transform ${DUR}ms cubic-bezier(.5,0,.5,1), opacity ${DUR}ms ease`;
+    bookEl.style.transition =
+      `transform ${DUR}ms cubic-bezier(.5,0,.5,1), opacity ${DUR}ms ease`;
     bookEl.style.transform = "rotateY(90deg) scaleX(0.05)";
-    bookEl.style.opacity = "0.15";
+    bookEl.style.opacity   = "0.15";
 
-    window.setTimeout(() => {
+    setTimeout(() => {
       bookEl.style.transition = "none";
-      bookEl.style.transform = "rotateY(-90deg) scaleX(0.05)";
-      resetStackInstant(rightStack);
-      if (isDesktop) resetStackInstant(leftStack);
+      bookEl.style.transform  = "rotateY(-90deg) scaleX(0.05)";
+
+      resetStackInstant();
       current = 0;
+      if (isDesktop) updateLeftPanel();
       void bookEl.offsetWidth;
 
-      bookEl.style.transition = `transform ${DUR}ms cubic-bezier(.5,0,.5,1), opacity ${DUR}ms ease`;
+      bookEl.style.transition =
+        `transform ${DUR}ms cubic-bezier(.5,0,.5,1), opacity ${DUR}ms ease`;
       bookEl.style.transform = "rotateY(0deg) scaleX(1)";
-      bookEl.style.opacity = "1";
+      bookEl.style.opacity   = "1";
 
-      window.setTimeout(() => {
+      setTimeout(() => {
         bookEl.style.transition = "";
-        bookEl.style.transform = "";
-        bookEl.style.opacity = "";
+        bookEl.style.transform  = "";
+        bookEl.style.opacity    = "";
         animating = false;
         updateArrows();
         updateCounter();
@@ -221,92 +350,144 @@
     }, DUR);
   }
 
+  // ---------- Event listeners ----------
+
   nextBtn.addEventListener("click", goNext);
   prevBtn.addEventListener("click", goPrev);
   restartBtn.addEventListener("click", startFromBeginning);
 
-  // click zones: right slot (or right half in single-page mode) -> next,
-  // left slot (or left half) -> prev
-  rightContainer.addEventListener("click", (e) => {
-    if (isDesktop) { goNext(); return; }
-    const rect = rightContainer.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    if (x > rect.width / 2) goNext(); else goPrev();
-  });
+  // Click / tap zones on the book itself
   if (isDesktop) {
+    rightContainer.addEventListener("click", goNext);
     leftContainer.addEventListener("click", goPrev);
+  } else {
+    // ---- Mobile: swipe + tap, with conflict prevention ----
+    let swipeFired  = false;
+    let touchStartX = null;
+    let touchStartY = null;
+
+    rightContainer.addEventListener("touchstart", (e) => {
+      touchStartX = e.changedTouches[0].clientX;
+      touchStartY = e.changedTouches[0].clientY;
+      swipeFired  = false;
+    }, { passive: true });
+
+    rightContainer.addEventListener("touchend", (e) => {
+      if (touchStartX === null) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      // Only count a horizontal swipe if dx is dominant over dy
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+        swipeFired = true;
+        dx < 0 ? goNext() : goPrev();
+      }
+      touchStartX = null;
+      touchStartY = null;
+    }, { passive: true });
+
+    rightContainer.addEventListener("click", (e) => {
+      // Ignore the click if a swipe was just handled
+      if (swipeFired) { swipeFired = false; return; }
+      const rect = rightContainer.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      x > rect.width / 2 ? goNext() : goPrev();
+    });
   }
 
+  // Keyboard navigation
   document.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowRight" || e.key === " ") goNext();
-    if (e.key === "ArrowLeft") goPrev();
+    if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); goNext(); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); }
   });
-
-  // basic swipe support (mobile)
-  let touchStartX = null;
-  rightContainer.addEventListener("touchstart", (e) => { touchStartX = e.changedTouches[0].clientX; }, { passive: true });
-  rightContainer.addEventListener("touchend", (e) => {
-    if (touchStartX === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    if (Math.abs(dx) > 40) { dx < 0 ? goNext() : goPrev(); }
-    touchStartX = null;
-  }, { passive: true });
 
   updateArrows();
   updateCounter();
 
   // ---------- Audio / mute ----------
+
   function setMuted(muted) {
     userMuted = muted;
     audio.muted = muted;
     muteBtn.classList.toggle("is-muted", muted);
     muteBtn.setAttribute("aria-pressed", String(muted));
-    iconOn.style.display = muted ? "none" : "block";
+    iconOn.style.display  = muted ? "none" : "block";
     iconOff.style.display = muted ? "block" : "none";
   }
 
-  function tryPlay() {
+  muteBtn.addEventListener("click", (e) => {
+    e.stopPropagation();     // don't let this bubble to the gesture handlers
+    setMuted(!userMuted);
+    // If the user just unmuted, try to resume playback
+    if (!userMuted && audio.paused) {
+      audio.play().catch(() => {});
+    }
+  });
+
+  // Try autoplay; if the browser blocks it, play on first user gesture.
+  setMuted(false);
+  audio.play().catch(() => {});
+
+  /** Attempt to start audio on the user's first gesture (tap, click, key). */
+  function onFirstGesture() {
+    if (userMuted) return;                     // respect the user's explicit mute
+    if (!audio.paused) {
+      removeGestureListeners();                // already playing — clean up
+      return;
+    }
     const p = audio.play();
-    if (p && typeof p.catch === "function") {
-      p.catch(() => { /* autoplay blocked until a user gesture; handled below */ });
+    if (p && typeof p.then === "function") {
+      p.then(removeGestureListeners)           // success — stop listening
+       .catch(() => {/* still blocked; keep listening for next gesture */});
     }
   }
 
-  muteBtn.addEventListener("click", () => setMuted(!userMuted));
-
-  // no title screen: start the music immediately. If the browser blocks
-  // autoplay-with-sound, start on the visitor's first interaction instead.
-  setMuted(false);
-  tryPlay();
-  function onFirstGesture() {
-    if (!userMuted && audio.paused) tryPlay();
-    window.removeEventListener("pointerdown", onFirstGesture);
-    window.removeEventListener("keydown", onFirstGesture);
+  function removeGestureListeners() {
+    window.removeEventListener("pointerdown", onFirstGesture, true);
+    window.removeEventListener("keydown",     onFirstGesture, true);
+    window.removeEventListener("touchstart",  onFirstGesture, true);
+    window.removeEventListener("click",       onFirstGesture, true);
   }
-  window.addEventListener("pointerdown", onFirstGesture);
-  window.addEventListener("keydown", onFirstGesture);
 
-  // ---------- Entrance: spin the book into view automatically ----------
-  window.requestAnimationFrame(() => {
+  // Listen on all common gesture types for maximum compatibility
+  window.addEventListener("pointerdown", onFirstGesture, true);
+  window.addEventListener("keydown",     onFirstGesture, true);
+  window.addEventListener("touchstart",  onFirstGesture, true);
+  window.addEventListener("click",       onFirstGesture, true);
+
+  // ---------- Entrance: spin the book into view ----------
+
+  requestAnimationFrame(() => {
     bookWrap.classList.add("enter-run");
-    bookWrap.addEventListener("animationend", function onEnd(ev) {
-      if (ev.target === bookEl) {
-        bookWrap.style.opacity = "1";
-        bookEl.style.transform = "none";
-        bookWrap.classList.remove("enter-run");
-        bookWrap.removeEventListener("animationend", onEnd);
-      }
-    });
+
+    let entranceDone = false;
+
+    function finishEntrance() {
+      if (entranceDone) return;
+      entranceDone = true;
+      bookWrap.style.opacity = "1";
+      bookEl.style.transform = "none";
+      bookWrap.classList.remove("enter-run");
+      bookWrap.removeEventListener("animationend", onAnimEnd);
+    }
+
+    function onAnimEnd(ev) {
+      if (ev.target === bookEl) finishEntrance();
+    }
+
+    bookWrap.addEventListener("animationend", onAnimEnd);
+    // Fallback: force visibility if animationend never fires (mobile quirk)
+    setTimeout(finishEntrance, 2000);
   });
 
   // ---------- Lightweight starfield background ----------
+
   (function starfield() {
     const canvas = document.getElementById("stars");
     const ctx = canvas.getContext("2d");
     let w, h, stars;
 
     function resize() {
-      w = canvas.width = window.innerWidth;
+      w = canvas.width  = window.innerWidth;
       h = canvas.height = window.innerHeight;
       const count = Math.floor((w * h) / 9000);
       stars = Array.from({ length: count }, () => ({
@@ -337,19 +518,20 @@
     requestAnimationFrame(draw);
   })();
 
-  // ---------- Fireworks burst, played once the back cover is reached ----------
+  // ---------- Fireworks burst (played when the back cover is reached) ----------
+
   const spawnFireworks = (function fireworksModule() {
     const canvas = document.getElementById("fireworks");
     const ctx = canvas.getContext("2d");
     const COLORS = ["#ff7a1a", "#f5d442", "#e13c3c", "#f4f1e8", "#8fa3c7"];
     let w, h;
     let particles = [];
-    let running = false;
-    let stopAt = 0;
+    let running   = false;
+    let stopAt    = 0;
     let lastBurst = 0;
 
     function resize() {
-      w = canvas.width = window.innerWidth;
+      w = canvas.width  = window.innerWidth;
       h = canvas.height = window.innerHeight;
     }
     window.addEventListener("resize", resize);
@@ -385,7 +567,7 @@
       particles.forEach((p) => {
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.045; // gravity
+        p.vy += 0.045;     // gravity
         p.life -= p.decay;
       });
       particles = particles.filter((p) => p.life > 0);
@@ -409,7 +591,7 @@
 
     return function spawn() {
       particles = [];
-      running = true;
+      running   = true;
       lastBurst = 0;
       const start = performance.now();
       stopAt = start + 4200;
