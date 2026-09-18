@@ -37,8 +37,6 @@
   const bookWrap       = document.getElementById("book-wrap");
   const bookEl         = document.getElementById("book");
   const muteBtn        = document.getElementById("mute-btn");
-  const iconOn         = document.getElementById("icon-on");
-  const iconOff        = document.getElementById("icon-off");
   const audio          = document.getElementById("bg-audio");
   const restartBtn     = document.getElementById("restart-btn");
 
@@ -62,7 +60,12 @@
     return names.map((name, i) => {
       const el = document.createElement("div");
       el.className = "page";
-      el.style.zIndex = String(n - i);
+      
+      const z = n - i;
+      el.style.zIndex = String(z);
+      // Give each page a 2px physical separation to prevent z-fighting
+      el.style.setProperty("--tz", `${z * 2}px`);
+      el.style.setProperty("--rot", "0deg");
 
       const front = document.createElement("div");
       front.className = "page-face front";
@@ -136,7 +139,6 @@
   const LAST = N - 1;
   let current   = 0;                // current spread/page index
   let animating = false;            // lock to prevent overlapping flips
-  let userMuted = false;
 
   // ---------- Desktop left-panel management ----------
 
@@ -163,17 +165,20 @@
   function flipForward(idx) {
     const el = rightStack[idx];
     el.classList.add("turning");
-    el.style.zIndex = String(100 + idx);   // rise above the unflipped stack
-    el.classList.add("flipped");
+    // Raise the z-index and --tz to sit cleanly on top of the left stack
+    el.style.zIndex = String(100 + idx);
+    el.style.setProperty("--tz", `${100 + idx}px`);
+    el.style.setProperty("--rot", "-180deg");
   }
 
   function flipBackward(idx) {
     const el = rightStack[idx];
     el.classList.add("turning");
-    // Keep z-index high (100 + idx) during the backward flip animation
-    // so the page is visible while rotating back. It is reset to its
-    // resting value inside onFlipDone after the transition ends.
-    el.classList.remove("flipped");
+    // Return to the original z-index and --tz so it slides smoothly back into the right stack
+    const originalZ = N - idx;
+    el.style.zIndex = String(originalZ);
+    el.style.setProperty("--tz", `${originalZ * 2}px`);
+    el.style.setProperty("--rot", "0deg");
   }
 
   /**
@@ -204,9 +209,12 @@
   /** Instantly reset the entire right stack to its initial (all-unflipped) state. */
   function resetStackInstant() {
     rightStack.forEach((el, i) => {
-      el.classList.remove("turning", "flipped");
+      el.classList.remove("turning");
       el.style.transition = "none";
-      el.style.zIndex = String(N - i);
+      const z = N - i;
+      el.style.zIndex = String(z);
+      el.style.setProperty("--tz", `${z * 2}px`);
+      el.style.setProperty("--rot", "0deg");
       void el.offsetWidth;   // force reflow so the transition removal takes effect
       el.style.transition = "";
     });
@@ -300,7 +308,7 @@
 
       onFlipDone(idx, () => {
         // Reset z-index to its resting position now that the animation is complete
-        rightStack[idx].style.zIndex = String(N - idx);
+        // (Z-index is now managed at the start of flipBackward, so we just remove the turning class)
         rightStack[idx].classList.remove("turning");
         animating = false;
       });
@@ -405,39 +413,65 @@
 
   // ---------- Audio / mute ----------
 
-  function setMuted(muted) {
-    userMuted = muted;
-    audio.muted = muted;
-    muteBtn.classList.toggle("is-muted", muted);
-    muteBtn.setAttribute("aria-pressed", String(muted));
-    iconOn.style.display  = muted ? "none" : "block";
-    iconOff.style.display = muted ? "block" : "none";
+  const iconPlay  = document.getElementById("icon-play");
+  const iconPause = document.getElementById("icon-pause");
+
+  let isPlaying = false;
+  let hasUserInteracted = false;
+
+  function updateAudioUI() {
+    if (isPlaying) {
+      iconPlay.style.display  = "none";
+      iconPause.style.display = "block";
+      muteBtn.classList.remove("is-muted");
+    } else {
+      iconPlay.style.display  = "block";
+      iconPause.style.display = "none";
+      muteBtn.classList.add("is-muted");
+    }
   }
+
+  function toggleAudio() {
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play().catch(() => {});
+    }
+  }
+
+  audio.addEventListener("play", () => {
+    isPlaying = true;
+    updateAudioUI();
+  });
+
+  audio.addEventListener("pause", () => {
+    isPlaying = false;
+    updateAudioUI();
+  });
 
   muteBtn.addEventListener("click", (e) => {
     e.stopPropagation();     // don't let this bubble to the gesture handlers
-    setMuted(!userMuted);
-    // If the user just unmuted, try to resume playback
-    if (!userMuted && audio.paused) {
-      audio.play().catch(() => {});
-    }
+    hasUserInteracted = true;
+    removeGestureListeners();
+    toggleAudio();
   });
 
   // Try autoplay; if the browser blocks it, play on first user gesture.
-  setMuted(false);
   audio.play().catch(() => {});
 
   /** Attempt to start audio on the user's first gesture (tap, click, key). */
   function onFirstGesture() {
-    if (userMuted) return;                     // respect the user's explicit mute
+    if (hasUserInteracted) return;
     if (!audio.paused) {
-      removeGestureListeners();                // already playing — clean up
+      removeGestureListeners(); // already playing — clean up
       return;
     }
     const p = audio.play();
     if (p && typeof p.then === "function") {
-      p.then(removeGestureListeners)           // success — stop listening
-       .catch(() => {/* still blocked; keep listening for next gesture */});
+      p.then(() => {
+        hasUserInteracted = true;
+        removeGestureListeners();
+      }).catch(() => {/* still blocked; keep listening for next gesture */});
     }
   }
 

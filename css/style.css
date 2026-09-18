@@ -192,13 +192,11 @@ body.spread-mode #book::before{
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
   transform-origin: left center;
-  transform: rotateY(0deg);
+  transform: translateZ(var(--tz, 0px)) rotateY(var(--rot, 0deg));
   transition: transform 0.85s cubic-bezier(.63,.06,.34,1);
   cursor: pointer;
 }
-.page.flipped{
-  transform: rotateY(-180deg);
-}
+
 /* GPU hint applied only while actively turning, removed after to save memory */
 .page.turning{
   will-change: transform;
@@ -214,8 +212,9 @@ body.spread-mode #book::before{
   box-shadow: 0 10px 40px rgba(0,0,0,0.55);
   background: var(--ink);
 }
-.page-face.front{ transform: rotateY(0deg); }
-.page-face.back{ transform: rotateY(180deg); }
+/* 1px translateZ creates physical thickness, preventing front/back z-fighting on iOS */
+.page-face.front{ transform: rotateY(0deg) translateZ(1px); }
+.page-face.back{ transform: rotateY(180deg) translateZ(1px); }
 
 .page-face img{
   width: 100%; height: 100%;
