@@ -3,33 +3,19 @@
 
   const BOOK_TITLE = "THE TALE OF DD\nAND THE SEVEN\nCOMPANIONS";
 
-  // ---- Full reading order, used in single-page (mobile) mode ----
+  // ---- Full reading order, used universally ----
   const ALL_PAGES = [
     "front_cover", "page1", "page2", "page3", "page4", "page5", "page6",
     "page7", "page8", "page9", "page10", "page11", "page12", "back_cover",
   ];
 
-  // ---- Desktop two-page spread pairs: [leftPage, rightPage] ----
-  // null = blank inside-cover title card
-  const SPREADS = [
-    [null,     "front_cover"],
-    ["page1",  "page2"],
-    ["page3",  "page4"],
-    ["page5",  "page6"],
-    ["page7",  "page8"],
-    ["page9",  "page10"],
-    ["page11", "page12"],
-    [null,     "back_cover"],
-  ];
-
   const src = (name) => `assets/images/${name}.jpg`;
 
-  // ---- Viewport mode detection ----
+  // ---- Viewport mode detection for CSS layout (centering the spine) ----
   const isDesktop = window.matchMedia("(min-width: 900px) and (pointer: fine)").matches;
   document.body.classList.toggle("spread-mode", isDesktop);
 
   // ---- DOM refs ----
-  const leftContainer  = document.getElementById("pages-left");
   const rightContainer = document.getElementById("pages-right");
   const prevBtn        = document.getElementById("prev-btn");
   const nextBtn        = document.getElementById("next-btn");
@@ -63,6 +49,8 @@
       
       const z = n - i;
       el.style.zIndex = String(z);
+      // Give each page a 2px physical separation to prevent z-fighting
+      el.style.setProperty("--tz", `${z * 2}px`);
       el.style.setProperty("--rot", "0deg");
 
       const front = document.createElement("div");
@@ -88,100 +76,33 @@
     });
   }
 
-  /**
-   * Build a static left-hand panel for desktop spread mode.
-   * Shows either a page image or a blank title card, updated instantly
-   * when the user navigates. This replaces the old dual-stack approach
-   * that caused the "two books" rendering bug.
-   */
-  function buildLeftPanel(container) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "left-panel";
-
-    const imgEl = document.createElement("img");
-    imgEl.className = "left-panel-img";
-    imgEl.draggable = false;
-
-    const cardEl = makeBackCard();
-
-    wrapper.appendChild(imgEl);
-    wrapper.appendChild(cardEl);
-    container.appendChild(wrapper);
-
-    return { wrapper, imgEl, cardEl };
-  }
-
   // ---------- Assemble the view for the current viewport ----------
 
-  let leftPanel = null;
-
-  // Desktop: right stack holds the right-hand page of each spread.
-  // Mobile:  right stack holds every page in sequential reading order.
-  const rightStack = buildStack(
-    rightContainer,
-    isDesktop ? SPREADS.map((s) => s[1]) : ALL_PAGES
-  );
-
-  if (isDesktop) {
-    leftPanel = buildLeftPanel(leftContainer);
-    // Pre-load all left-panel images so they swap instantly on navigation
-    SPREADS.forEach(([leftName]) => {
-      if (leftName) {
-        const preload = new Image();
-        preload.src = src(leftName);
-      }
-    });
-  }
+  const rightStack = buildStack(rightContainer, ALL_PAGES);
 
   const N    = rightStack.length;   // total turnable positions
   const LAST = N - 1;
   let current   = 0;                // current spread/page index
   let animating = false;            // lock to prevent overlapping flips
 
-  // ---------- Desktop left-panel management ----------
-
-  /** Update the static left panel to show the correct page for the current spread. */
-  function updateLeftPanel() {
-    if (!leftPanel) return;
-    
-    // Hide the left panel entirely when on the front cover
-    if (current === 0) {
-      leftPanel.wrapper.style.opacity = "0";
-      leftPanel.wrapper.style.pointerEvents = "none";
-    } else {
-      leftPanel.wrapper.style.opacity = "1";
-      leftPanel.wrapper.style.pointerEvents = "auto";
-    }
-
-    const leftName = SPREADS[current][0];
-    if (leftName) {
-      leftPanel.imgEl.src = src(leftName);
-      leftPanel.imgEl.alt = leftName.replace(/_/g, " ");
-      leftPanel.imgEl.style.display = "block";
-      leftPanel.cardEl.style.display = "none";
-    } else {
-      leftPanel.imgEl.style.display = "none";
-      leftPanel.cardEl.style.display = "";   // restore CSS default (flex)
-    }
-  }
-
-  // Set the initial left-panel state
-  if (isDesktop) updateLeftPanel();
-
   // ---------- Flip mechanics ----------
 
   function flipForward(idx) {
     const el = rightStack[idx];
     el.classList.add("turning");
+    // Raise the z-index and --tz to sit cleanly on top of the left stack
     el.style.zIndex = String(100 + idx);
+    el.style.setProperty("--tz", `${100 + idx}px`);
     el.style.setProperty("--rot", "-180deg");
   }
 
   function flipBackward(idx) {
     const el = rightStack[idx];
     el.classList.add("turning");
+    // Return to the original z-index and --tz so it slides smoothly back into the right stack
     const originalZ = N - idx;
     el.style.zIndex = String(originalZ);
+    el.style.setProperty("--tz", `${originalZ * 2}px`);
     el.style.setProperty("--rot", "0deg");
   }
 
@@ -217,6 +138,7 @@
       el.style.transition = "none";
       const z = N - i;
       el.style.zIndex = String(z);
+      el.style.setProperty("--tz", `${z * 2}px`);
       el.style.setProperty("--rot", "0deg");
       void el.offsetWidth;   // force reflow so the transition removal takes effect
       el.style.transition = "";
@@ -226,12 +148,6 @@
   // ---------- UI state helpers ----------
 
   function labelFor(idx) {
-    if (isDesktop) {
-      if (idx === 0)    return "Front Cover";
-      if (idx === LAST) return "Back Cover";
-      const rp = idx * 2;
-      return `Pages ${rp - 1}\u2013${rp}`;
-    }
     if (idx === 0)    return "Front Cover";
     if (idx === LAST) return "Back Cover";
     return `Page ${idx} of ${N - 2}`;
@@ -268,7 +184,6 @@
     flipForward(fromIdx);
     current += 1;
 
-    if (isDesktop) updateLeftPanel();
     updateCounter();
 
     // Show/hide prev and next based on new position
@@ -305,7 +220,6 @@
       const idx = current;
       flipBackward(idx);
 
-      if (isDesktop) updateLeftPanel();
       updateArrows();
       updateCounter();
 
@@ -342,7 +256,6 @@
 
       resetStackInstant();
       current = 0;
-      if (isDesktop) updateLeftPanel();
       void bookEl.offsetWidth;
 
       bookEl.style.transition =
@@ -368,42 +281,49 @@
   restartBtn.addEventListener("click", startFromBeginning);
 
   // Click / tap zones on the book itself
-  if (isDesktop) {
-    rightContainer.addEventListener("click", goNext);
-    leftContainer.addEventListener("click", goPrev);
-  } else {
-    // ---- Mobile: swipe + tap, with conflict prevention ----
-    let swipeFired  = false;
-    let touchStartX = null;
-    let touchStartY = null;
+  // ---- Universal: swipe + tap, with conflict prevention ----
+  let swipeFired  = false;
+  let touchStartX = null;
+  let touchStartY = null;
 
-    rightContainer.addEventListener("touchstart", (e) => {
-      touchStartX = e.changedTouches[0].clientX;
-      touchStartY = e.changedTouches[0].clientY;
-      swipeFired  = false;
-    }, { passive: true });
+  rightContainer.addEventListener("touchstart", (e) => {
+    touchStartX = e.changedTouches[0].clientX;
+    touchStartY = e.changedTouches[0].clientY;
+    swipeFired  = false;
+  }, { passive: true });
 
-    rightContainer.addEventListener("touchend", (e) => {
-      if (touchStartX === null) return;
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      const dy = e.changedTouches[0].clientY - touchStartY;
-      // Only count a horizontal swipe if dx is dominant over dy
-      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
-        swipeFired = true;
-        dx < 0 ? goNext() : goPrev();
-      }
-      touchStartX = null;
-      touchStartY = null;
-    }, { passive: true });
+  rightContainer.addEventListener("touchend", (e) => {
+    if (touchStartX === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    // Only count a horizontal swipe if dx is dominant over dy
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+      swipeFired = true;
+      dx < 0 ? goNext() : goPrev();
+    }
+    touchStartX = null;
+    touchStartY = null;
+  }, { passive: true });
 
-    rightContainer.addEventListener("click", (e) => {
-      // Ignore the click if a swipe was just handled
-      if (swipeFired) { swipeFired = false; return; }
-      const rect = rightContainer.getBoundingClientRect();
-      const x = e.clientX - rect.left;
+  rightContainer.addEventListener("click", (e) => {
+    // Ignore the click if a swipe was just handled
+    if (swipeFired) { swipeFired = false; return; }
+    
+    // On desktop spread mode, rightContainer is 50% width and centered on the right.
+    // If the user clicks the left half of the screen, it usually won't hit rightContainer 
+    // because rightContainer is only on the right half. But they have nav arrows for that.
+    // If they click rightContainer itself, we just go next.
+    // On mobile, rightContainer is 100% width, so we check left/right side.
+    const rect = rightContainer.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (rect.width > window.innerWidth * 0.8) {
+      // Full screen (mobile)
       x > rect.width / 2 ? goNext() : goPrev();
-    });
-  }
+    } else {
+      // Desktop spread half-width container
+      goNext();
+    }
+  });
 
   // Keyboard navigation
   document.addEventListener("keydown", (e) => {

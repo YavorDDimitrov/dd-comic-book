@@ -129,21 +129,14 @@ body.spread-mode #perspective{
   perspective: 2600px;
   -webkit-perspective: 2600px;
 }
-/* mobile / single-page mode: right slot fills the whole book, left is unused */
-#pages-left{ flex: 0 0 0%; width: 0%; opacity: 0; pointer-events: none; }
-#pages-right{ flex: 1 1 100%; width: 100%; }
+/* mobile / single-page mode: right slot fills the whole book */
+#pages-right{ flex: 1 1 100%; width: 100%; margin-left: auto; }
 
-/* desktop spread mode: both slots share the width with a spine gap between */
-body.spread-mode #pages-left{
-  flex: 0 0 calc(50% - 6px);
-  width: calc(50% - 6px);
-  opacity: 1;
-  pointer-events: auto;
-  margin-right: 12px;
-}
+/* desktop spread mode: right slot takes right half, pushed to the right by margin-left auto */
 body.spread-mode #pages-right{
   flex: 0 0 calc(50% - 6px);
   width: calc(50% - 6px);
+  margin-left: auto;
 }
 /* a soft spine shadow down the centre of an open spread */
 body.spread-mode #book::before{
@@ -157,32 +150,7 @@ body.spread-mode #book::before{
   pointer-events: none;
 }
 
-/* ---------- Static left panel (desktop spread mode) ---------- */
-/* Replaces the old dual-stack approach to eliminate the "two books" bug. */
-.left-panel{
-  width: 100%; height: 100%;
-  border-radius: 4px;
-  overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.55);
-  background: var(--ink);
-  position: relative;
-  transition: opacity 0.3s ease;
-}
-.left-panel-img{
-  width: 100%; height: 100%;
-  object-fit: cover;
-  display: block;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-/* spine shadow on the RIGHT edge of the left panel (nearest the spine) */
-.left-panel::after{
-  content:"";
-  position: absolute; inset: 0;
-  pointer-events: none;
-  background: linear-gradient(270deg, rgba(0,0,0,0.35) 0%, transparent 16%);
-}
+/* left-panel logic removed to simplify to a universal single stack */
 
 /* ---------- Flip pages ---------- */
 .page{
@@ -191,7 +159,7 @@ body.spread-mode #book::before{
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
   transform-origin: left center;
-  transform: rotateY(var(--rot, 0deg));
+  transform: translateZ(var(--tz, 0px)) rotateY(var(--rot, 0deg));
   transition: transform 0.85s cubic-bezier(.63,.06,.34,1);
   cursor: pointer;
 }
