@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DD and the New Adventure — A Sci-Fi Birthday Tale</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
+<title>The Tale of DD and the Seven Companions — A Birthday Fairytale</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📖</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -17,6 +17,9 @@
   <!-- starfield background -->
   <canvas id="stars"></canvas>
 
+  <!-- fireworks burst, played once the back cover is reached -->
+  <canvas id="fireworks"></canvas>
+
   <!-- mute button, always present -->
   <button id="mute-btn" aria-label="Mute background music" aria-pressed="false">
     <svg id="icon-on" viewBox="0 0 24 24" width="22" height="22"><path d="M3 10v4h4l5 5V5L7 10H3z" fill="currentColor"/><path d="M16.5 12a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12z" fill="currentColor"/><path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" fill="currentColor"/></svg>
@@ -27,9 +30,10 @@
   <div id="book-wrap">
     <div id="perspective">
       <div id="book">
-        <div id="pages">
-          <!-- pages injected by JS, in order: cover, page1..page6 -->
-        </div>
+        <!-- left slot: only populated/shown in desktop two-page spread mode -->
+        <div id="pages-left" class="book-slot"></div>
+        <!-- right slot: the interactive stack. Full width in single-page (mobile) mode. -->
+        <div id="pages-right" class="book-slot"></div>
       </div>
     </div>
   </div>
@@ -50,16 +54,6 @@
 
   <!-- page counter -->
   <div id="page-counter"></div>
-
-  <!-- tap-to-start overlay, required by browsers to allow audio -->
-  <div id="start-overlay">
-    <div id="start-card">
-      <div class="start-title">DD AND THE NEW ADVENTURE</div>
-      <div class="start-sub">A Sci-Fi Birthday Tale</div>
-      <button id="start-btn">ENTER ▸</button>
-      <div class="start-hint">Turns on music &amp; opens the book</div>
-    </div>
-  </div>
 
 </div>
 

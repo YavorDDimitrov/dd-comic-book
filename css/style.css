@@ -33,9 +33,11 @@ html, body{
     linear-gradient(180deg, var(--navy) 0%, var(--navy-deep) 100%);
 }
 
-#stars{
-  position:absolute; inset:0; width:100%; height:100%; z-index:0;
+#stars, #fireworks{
+  position:absolute; inset:0; width:100%; height:100%;
 }
+#stars{ z-index:0; }
+#fireworks{ z-index:1; pointer-events:none; }
 
 /* ---------- Mute button ---------- */
 #mute-btn{
@@ -72,22 +74,29 @@ html, body{
   perspective-origin: 50% 50%;
   width: min(64vh, 92vw);
   height: min(95.4vh, 137.1vw);
-  aspect-ratio: 848 / 1264;
   max-width: 570px;
   max-height: 849px;
+  transition: width 0.3s ease, max-width 0.3s ease;
+}
+
+/* desktop two-page spread: roughly double width so both pages read at a
+   comfortable size, height is unchanged (driven by a single page's height) */
+body.spread-mode #perspective{
+  width: min(122vh, 96vw);
+  max-width: 1150px;
 }
 
 #book{
   position: relative;
   width: 100%; height: 100%;
+  display: flex;
+  flex-direction: row;
+  gap: 0;
   transform-style: preserve-3d;
   will-change: transform;
 }
 
-/* spin-into-view entrance */
-#book-wrap.enter-start{
-  opacity: 0;
-}
+/* spin-into-view entrance, plays automatically on load */
 #book-wrap.enter-run #book{
   animation: bookSpinIn 1.35s cubic-bezier(.22,.9,.32,1.08) forwards;
 }
@@ -111,10 +120,38 @@ html, body{
   }
 }
 
-#pages{
+/* ---------- Left / right page slots ---------- */
+.book-slot{
   position: relative;
-  width: 100%; height: 100%;
+  height: 100%;
   transform-style: preserve-3d;
+}
+/* mobile / single-page mode: right slot fills the whole book, left is unused */
+#pages-left{ flex: 0 0 0%; width: 0%; opacity: 0; pointer-events: none; }
+#pages-right{ flex: 1 1 100%; width: 100%; }
+
+/* desktop spread mode: both slots share the width with a spine gap between */
+body.spread-mode #pages-left{
+  flex: 0 0 calc(50% - 6px);
+  width: calc(50% - 6px);
+  opacity: 1;
+  pointer-events: auto;
+  margin-right: 12px;
+}
+body.spread-mode #pages-right{
+  flex: 0 0 calc(50% - 6px);
+  width: calc(50% - 6px);
+}
+/* a soft spine shadow down the centre of an open spread */
+body.spread-mode #book::before{
+  content:"";
+  position: absolute;
+  left: 50%; top: 0; bottom: 0;
+  width: 24px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.4), transparent);
+  z-index: 40;
+  pointer-events: none;
 }
 
 .page{
@@ -153,21 +190,25 @@ html, body{
   user-select: none;
 }
 
-/* back-of-page design: plain cardstock with a faint emblem, so turned pages
-   don't show a mirrored image */
+/* back-of-page / inside-cover design: plain cardstock with the book's title,
+   used for generic page backs (mobile) and the blank inside-cover panels
+   that sit opposite the front/back cover in desktop spread mode */
 .back-card{
   width: 100%; height: 100%;
   background:
     repeating-linear-gradient(135deg, rgba(255,255,255,0.02) 0 2px, transparent 2px 6px),
     linear-gradient(160deg, #14182c 0%, #0a0c18 100%);
   display: flex; align-items: center; justify-content: center;
+  padding: 10%;
+  text-align: center;
 }
 .back-card span{
   font-family: 'Bangers', cursive;
   letter-spacing: 2px;
+  line-height: 1.3;
   font-size: clamp(14px, 2.6vw, 22px);
-  color: rgba(255,255,255,0.12);
-  transform: rotate(-8deg);
+  color: rgba(255,255,255,0.14);
+  transform: rotate(-4deg);
 }
 
 /* spine shadow that darkens pages as they approach vertical (page-turn realism) */
@@ -286,67 +327,6 @@ html, body{
   transition: opacity 0.4s ease;
 }
 #page-counter.visible{ opacity: 1; }
-
-/* ---------- Start overlay ---------- */
-#start-overlay{
-  position: fixed; inset: 0;
-  z-index: 200;
-  display: flex; align-items: center; justify-content: center;
-  background:
-    radial-gradient(ellipse at 50% 30%, rgba(90,60,180,0.35), transparent 55%),
-    var(--navy-deep);
-  transition: opacity 0.6s ease, visibility 0.6s ease;
-}
-#start-overlay.hidden{
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
-#start-card{
-  text-align: center;
-  padding: 40px 36px;
-}
-.start-title{
-  font-family: 'Bangers', cursive;
-  font-size: clamp(30px, 6vw, 52px);
-  letter-spacing: 2px;
-  line-height: 1.1;
-  color: var(--paper);
-  text-shadow: 3px 3px 0 var(--orange);
-  max-width: 620px;
-}
-.start-sub{
-  margin-top: 10px;
-  font-size: clamp(13px, 2vw, 16px);
-  letter-spacing: 4px;
-  text-transform: uppercase;
-  color: var(--yellow);
-}
-#start-btn{
-  margin-top: 36px;
-  font-family: 'Bangers', cursive;
-  font-size: 22px;
-  letter-spacing: 2px;
-  color: var(--ink);
-  background: var(--orange);
-  border: none;
-  padding: 14px 34px;
-  border-radius: 6px;
-  cursor: pointer;
-  box-shadow: 0 6px 0 #b3540f, 0 10px 24px rgba(255,122,26,0.35);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-#start-btn:hover{ transform: translateY(-2px); }
-#start-btn:active{
-  transform: translateY(3px);
-  box-shadow: 0 2px 0 #b3540f, 0 6px 14px rgba(255,122,26,0.35);
-}
-.start-hint{
-  margin-top: 16px;
-  font-size: 11px;
-  letter-spacing: 1px;
-  color: var(--steel);
-}
 
 @media (prefers-reduced-motion: reduce){
   #book-wrap.enter-run #book{ animation: none; }
